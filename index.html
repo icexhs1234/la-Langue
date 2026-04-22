@@ -3,105 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>心词典 - AI Parallel Dictionary</title>
+    <title>心词典</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="logo.png">
-    <link rel="icon" type="image/png" href="logo.png">
     <link rel="manifest" href="manifest.json">
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;700&display=swap" rel="stylesheet">
-    
     <style>
-        body { font-family: 'Lexend', sans-serif; background: #f8fafc; -webkit-tap-highlight-color: transparent; }
-        .glass-card { background: white; border-radius: 32px; border: 1px solid #f1f5f9; box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05); }
-        .horizontal-scroll { display: flex; overflow-x: auto; gap: 1rem; scroll-snap-type: x mandatory; scrollbar-width: none; }
+        body { font-family: sans-serif; background: #f8fafc; overflow: hidden; }
+        .glass-card { background: white; border-radius: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .horizontal-scroll { display: flex; overflow-x: auto; gap: 1rem; scroll-snap-type: x mandatory; padding-bottom: 20px; }
         .horizontal-scroll::-webkit-scrollbar { display: none; }
-        .horizontal-scroll > div { min-width: 88vw; scroll-snap-align: center; }
-        .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + 80px); }
-        .flip-card { perspective: 1000px; height: 350px; }
-        .flip-card-inner { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; }
-        .flipped .flip-card-inner { transform: rotateY(180deg); }
-        .flip-front, .flip-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
-        .flip-back { transform: rotateY(180deg); background: white; }
-        @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .loading-pulse { animation: pulse-soft 2s infinite; }
+        .horizontal-scroll > div { min-width: 85vw; scroll-snap-align: center; }
+        .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + 100px); }
     </style>
 </head>
-<body class="overflow-hidden h-screen flex flex-col">
+<body class="h-screen flex flex-col">
 
     <!-- 设置遮罩层 -->
     <div id="setup-overlay" class="fixed inset-0 z-50 bg-blue-600 flex items-center justify-center p-6 hidden">
-        <div class="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl text-center">
-            <img src="logo.png" class="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg">
-            <h1 class="text-2xl font-bold text-gray-800 mb-1">心词典 💖</h1>
-            <p class="text-gray-400 text-sm mb-6">让语言学习不再冷冰冰</p>
+        <div class="bg-white w-full max-w-sm p-8 rounded-[32px] shadow-2xl text-center">
+            <img src="logo.png" id="setup-logo" class="w-20 h-20 mx-auto mb-4 rounded-2xl shadow-lg">
+            <h1 class="text-2xl font-bold mb-6">欢迎使用心词典</h1>
             <div class="text-left space-y-4">
-                <div>
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">你的母语</label>
-                    <select id="native-lang" class="w-full p-3 bg-gray-50 rounded-xl border-none outline-none"></select>
-                </div>
-                <div>
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">目标语言 (多选)</label>
-                    <div id="target-langs-grid" class="grid grid-cols-2 gap-2 mt-1"></div>
-                </div>
-                <button onclick="saveSettings()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold mt-4 shadow-lg">开启探索</button>
+                <select id="native-lang" class="w-full p-3 bg-gray-50 rounded-xl outline-none border"></select>
+                <div id="target-langs-grid" class="grid grid-cols-2 gap-2"></div>
+                <button onclick="saveSettings()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg">开始学习</button>
             </div>
         </div>
     </div>
 
     <!-- 顶部导航 -->
-    <header class="p-6 pt-12 flex justify-between items-end bg-white/50 backdrop-blur-lg">
-        <div>
-            <p id="today-date" class="text-blue-500 text-[10px] font-bold uppercase tracking-widest mb-1"></p>
-            <h1 id="title-text" class="text-3xl font-bold text-gray-800">查单词</h1>
-        </div>
-        <button onclick="showSettings()" class="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-gray-100">
-            <i class="fa-solid fa-sliders text-gray-400"></i>
-        </button>
+    <header class="p-6 pt-12 flex justify-between items-center">
+        <h1 id="view-title" class="text-3xl font-bold">查单词</h1>
+        <button onclick="showSettings()" class="w-10 h-10 bg-white rounded-xl shadow-sm border border-gray-100"><i class="fa-solid fa-gear text-gray-400"></i></button>
     </header>
 
-    <!-- 主内容区 -->
-    <main class="flex-1 overflow-y-auto safe-bottom">
-        
-        <!-- 搜索视图 -->
-        <div id="view-search" class="px-6 mt-4">
-            <div class="relative mb-6">
-                <input id="search-input" type="text" placeholder="输入生词..." 
-                       class="w-full p-5 pr-16 rounded-3xl bg-white shadow-xl shadow-blue-100/20 border-none outline-none text-lg">
-                <button onclick="handleSearch()" class="absolute right-2 top-2 w-12 h-12 bg-blue-600 text-white rounded-2xl shadow-lg">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                </button>
+    <!-- 主内容 -->
+    <main class="flex-1 overflow-y-auto px-6 safe-bottom">
+        <div id="tab-search">
+            <div class="relative mb-8">
+                <input id="search-input" type="text" placeholder="输入单词..." class="w-full p-4 pr-14 rounded-2xl bg-white shadow-sm border-none outline-none">
+                <button onclick="handleSearch()" class="absolute right-2 top-2 w-10 h-10 bg-blue-600 text-white rounded-xl shadow-lg"><i class="fa-solid fa-search"></i></button>
             </div>
-
-            <div id="result-area">
-                <div id="empty-hint" class="text-center py-20">
-                    <img src="logo.png" class="w-24 h-24 mx-auto mb-4 opacity-30 grayscale">
-                    <p class="text-gray-300 font-medium">输入一个词，融化语言的隔阂</p>
+            <div id="result-container" class="horizontal-scroll">
+                <div id="empty-state" class="w-full text-center py-20 text-gray-300">
+                    <img src="logo.png" class="w-20 h-20 mx-auto mb-4 opacity-20">
+                    <p>搜索一个词开始旅程</p>
                 </div>
-                <div id="result-scroll-container" class="horizontal-scroll"></div>
             </div>
         </div>
 
-        <!-- 笔记本视图 -->
-        <div id="view-notebook" class="px-6 hidden">
-            <div class="flex justify-between items-center mb-6 mt-4">
-                <h2 class="text-xl font-bold">收藏夹</h2>
-                <input type="range" min="14" max="24" value="16" oninput="adjustFont(this.value)" class="w-24">
-            </div>
-            <div id="notebook-list" class="space-y-4"></div>
-        </div>
-
-        <!-- 闪卡复习视图 -->
-        <div id="view-flashcard" class="px-6 hidden mt-4">
-            <div id="flashcard-container"></div>
-        </div>
+        <div id="tab-notebook" class="hidden space-y-4"></div>
+        <div id="tab-flashcards" class="hidden"></div>
     </main>
 
     <!-- 底部导航 -->
-    <nav class="fixed bottom-0 w-full bg-white/80 backdrop-blur-2xl border-t border-gray-100 px-10 py-6 flex justify-between items-center pb-8">
-        <button onclick="switchTab('search')" id="nav-search" class="text-blue-600"><i class="fa-solid fa-magnifying-glass text-xl"></i></button>
-        <button onclick="switchTab('notebook')" id="nav-notebook" class="text-gray-300"><i class="fa-solid fa-bookmark text-xl"></i></button>
-        <button onclick="switchTab('flashcard')" id="nav-flashcard" class="text-gray-300"><i clas
+    <nav class="fixed bottom-0 w-full bg-white border-t border-gray-100 p-6 flex justify-around items-center pb-10">
+        <button onclick="switchTab('search')" id="btn-search" class="text-blue-600 text-xl"><i class="fa-solid fa-magnifying-glass"></i></button>
+        <button onclick="switchTab('notebook')" id="btn-notebook" class="text-gray-300 text-xl"><i class="fa-solid fa-book"></i></button>
+        <button onclick="switchTab('flashcards')" id="btn-flashcards" class="text-gray-300 text-xl"><i class="fa-solid fa-bolt"></i></button>
+    </nav>
+
+    <script>
+        // 注册 Service Worker (关键)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js');
+        }
+
+        const LANGUAGES = ['English', 'Chinese', 'Japanese', 'French', 'Spanish', 'German'];
+        let config = JSON.parse(localStorage.getItem('h_dict_conf')) || { native: 'Chinese', targets: ['English'] };
+        let notebook = JSON.parse(localStorage.getItem('h_dict_note')) || [];
+
+        window.onload = () => {
+            renderSetup();
+            if(!localStorage.getItem('h_dict_conf')) document.getElementById('setup-overlay').classList.remove('hidden');
+        };
+
+        function renderSetup() {
+            const grid = document.getElementById('target-langs-grid');
+            const nSelect = document.getElementById('native-lang');
+            grid.innerHTML = '';
+            LANGUAGES.forEach(lang => {
+                nSelect.add(new Option(lang, lang));
+                const btn = document.createElement('div');
+                btn.className = `p-3 border rounded-xl text-center text-xs font-bold cursor-pointer ${config.targets.includes(lang) ? 'bg-blue-600 text-white' : 'bg-gray-50'}`;
+                btn.innerText = lang;
+                btn.onclick = () => {
+                    if(config.targets.includes(lang)) config.targets = config.targets.filter(t => t !== lang);
+                    else config.targets.push(lang);
+                    renderSetup();
+                };
+                grid.appendChild(btn);
+            });
+            nSelect.value = config.native;
+        }
+
+        function saveSettings() {
+            config.native = document.getElementById('native-lang').value;
+            localStorage.setItem('h_dict_conf', JSON.stringify(config));
+            document.getElementById('setup-overlay').classList.add('hidden');
+            location.reload();
+        }
+
+        function showSettings() { document.getElementById('setup-overlay').classList.remove('hidden'); }
+
+        function handleSearch() {
+            const val = document.getElementById('search-input').value.trim();
+            if(!val) return;
+            document.getElementById('result-container').innerHTML = '<p class="w-full text-center py-10 animate-pulse text-blue-500 font-bold">AI 正在加载...</p>';
+            
+            setTimeout(() => {
+                document.getElementById('result-container').innerHTML = '';
+                config.targets.forEach(lang => {
+                    const card = document.createElement('div');
+                    card.className = 'glass-card p-6 flex flex-col';
+                    card.innerHTML = `
+                        <div class="flex justify-between mb-4"><span class="text-xs font-bold text-blue-500">${lang}</span><button onclick="saveWord('${val}', '${lang}')"><i class="fa-solid fa-heart text-gray-200"></i></button></div>
+                        <h2 class="text-2xl font-bold mb-4">${val}</h2>
+                        <p class="text-sm text-gray-600 mb-6">这是“${val}”在 ${lang} 里的自然释义。AI 认为这个词在口语中非常常用。</p>
+                        <div class="bg-blue-50 p-4 rounded-xl text-xs text-blue-700 italic border-l-4 border-blue-400">"This is an example sentence using ${val}."</div>
+                    `;
+                    document.getElementById('result-container').appendChild(card);
+                });
+            }, 600);
+        }
+
+        function saveWord(word, lang) {
+            notebook.push({word, lang, id: Date.now(), nextReview: Date.now()});
+            localStorage.setItem('h_dict_note', JSON.stringify(notebook));
+            alert('收藏成功');
+        }
+
+        function switchTab(tab) {
+            ['search', 'notebook', 'flashcards'].forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+                document.getElementById('btn-' + t).classList.replace('text-blue-600', 'text-gray-300');
+            });
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            document.getElementById('btn-' + tab).classList.replace('text-gray-300', 'text-blue-600');
+            document.getElementById('view-title').innerText = tab === 'search' ? '查单词' : (tab === 'notebook' ? '笔记本' : '复习');
+            if(tab === 'notebook') renderNotebook();
+        }
+
+        function renderNotebook() {
+            const container = document.getElementById('tab-notebook');
+            container.innerHTML = notebook.map(n => `<div class="glass-card p-4 flex justify-between font-bold"><span>${n.word}</span><span class="text-blue-400 text-xs">${n.lang}</span></div>`).join('');
+        }
+    </script>
+</body>
+</html>

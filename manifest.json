@@ -1,0 +1,15 @@
+{
+  "name": "心词典",
+  "short_name": "心词典",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#3b82f6",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
