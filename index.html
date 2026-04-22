@@ -3,230 +3,342 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>心词典 - 真正多语解析</title>
+    <title>我的词典</title>
+    <!-- PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <style>
-        body { font-family: -apple-system, system-ui, sans-serif; background: #F8FAFC; color: #1E293B; overflow: hidden; }
-        .glass-card { background: white; border-radius: 32px; box-shadow: 0 10px 40px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.02); }
-        .horizontal-scroll { display: flex; overflow-x: auto; gap: 1.5rem; scroll-snap-type: x mandatory; padding: 0 20px 40px 20px; }
-        .horizontal-scroll::-webkit-scrollbar { display: none; }
-        .horizontal-scroll > div { min-width: 88vw; scroll-snap-align: center; }
-        .safe-bottom { padding-bottom: calc(env(safe-area-inset-bottom) + 110px); }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-card { animation: fadeIn 0.5s ease-out forwards; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: #F0F7FF; color: #1E293B; }
+        .safe-area { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); }
+        
+        /* 翻牌动画 */
+        .flip-container { perspective: 1000px; height: 420px; }
+        .flipper { position: relative; width: 100%; height: 100%; transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; }
+        .flipped { transform: rotateY(180deg); }
+        .front, .back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 32px; padding: 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 15px 35px rgba(0,0,0,0.05); }
+        .back { background: white; transform: rotateY(180deg); }
+        .front { background: #3b82f6; color: white; }
+
+        /* 隐藏滚动条 */
+        ::-webkit-scrollbar { display: none; }
     </style>
 </head>
-<body class="h-screen flex flex-col">
+<body class="h-screen flex flex-col overflow-hidden">
 
-    <!-- 语言设置（支持 API KEY 填入） -->
-    <div id="setup-overlay" class="fixed inset-0 z-50 bg-blue-600 flex items-center justify-center p-6 hidden">
-        <div class="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl">
-            <h1 class="text-2xl font-bold mb-4 text-center">设置 & 配置</h1>
-            <div class="space-y-4">
+    <!-- 语言设置遮罩 -->
+    <div id="setup-overlay" class="fixed inset-0 z-50 bg-blue-500 flex items-center justify-center p-6 hidden">
+        <div class="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl text-center">
+            <img src="logo.png" class="w-24 h-24 mx-auto mb-4 rounded-3xl shadow-lg">
+            <h1 class="text-2xl font-bold mb-6">设定你的偏好</h1>
+            <div class="space-y-4 text-left">
                 <div>
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">目标语言 (多选)</label>
-                    <div id="target-langs-grid" class="grid grid-cols-2 gap-2 mt-1"></div>
+                    <label class="text-xs font-bold text-gray-400 uppercase ml-1">你的母语</label>
+                    <select id="native-lang" class="w-full p-4 bg-gray-50 rounded-2xl outline-none border-none"></select>
                 </div>
                 <div>
-                    <label class="text-[10px] font-bold text-gray-400 uppercase ml-1">API Key (可选 - 连接真实 AI)</label>
-                    <input id="api-key" type="password" placeholder="sk-..." class="w-full p-3 bg-gray-50 rounded-xl text-xs border-none outline-none">
+                    <label class="text-xs font-bold text-gray-400 uppercase ml-1">学习的目标语言</label>
+                    <select id="target-lang" class="w-full p-4 bg-gray-50 rounded-2xl outline-none border-none"></select>
                 </div>
-                <button onclick="saveSettings()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold shadow-lg">保存设置</button>
+                <button onclick="saveConfig()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold text-lg shadow-lg">开启词汇之旅</button>
             </div>
         </div>
     </div>
 
     <!-- 顶部 -->
-    <header class="p-6 pt-12 flex justify-between items-center">
+    <header class="p-6 pt-12 flex justify-between items-center bg-white/50 backdrop-blur-md">
         <div>
-            <h1 class="text-3xl font-bold tracking-tight">词汇实验室</h1>
-            <div id="active-langs-bar" class="flex gap-1 mt-1"></div>
+            <h1 id="view-title" class="text-3xl font-bold tracking-tight text-gray-800">查单词</h1>
+            <p id="lang-indicator" class="text-blue-500 text-xs font-bold mt-1 uppercase tracking-widest"></p>
         </div>
-        <button onclick="showSettings()" class="w-10 h-10 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center">
-            <i class="fa-solid fa-sliders text-blue-500"></i>
+        <button onclick="showSettings()" class="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center">
+            <i class="fa-solid fa-gear text-gray-300"></i>
         </button>
     </header>
 
-    <!-- 搜索栏 -->
-    <div class="px-6 relative mb-6">
-        <input id="search-input" type="text" placeholder="输入英语、日语、法语..." class="w-full p-5 pr-14 rounded-[24px] bg-white shadow-sm border-none outline-none text-lg">
-        <button onclick="handleSearch()" class="absolute right-8 top-3 w-10 h-10 bg-blue-600 text-white rounded-xl shadow-lg">
-            <i class="fa-solid fa-wand-magic-sparkles"></i>
-        </button>
-    </div>
-
-    <!-- 结果区 -->
-    <main class="flex-1 overflow-y-auto safe-bottom">
-        <div id="result-container" class="horizontal-scroll">
-            <div id="empty-state" class="w-full text-center py-20">
-                <img src="logo.png" class="w-24 h-24 mx-auto mb-4 opacity-10 grayscale">
-                <p class="text-gray-300 text-sm italic">选择目标语言，AI 将为您解析</p>
+    <!-- 主体区域 -->
+    <main id="main-content" class="flex-1 overflow-y-auto px-6 pb-32">
+        <!-- 1. 搜索页视图 -->
+        <div id="tab-search">
+            <div class="relative mt-4 mb-8">
+                <input id="search-input" type="text" placeholder="输入生词或表达..." class="w-full p-5 pr-14 rounded-[28px] bg-white shadow-xl shadow-blue-900/5 border-none outline-none text-lg">
+                <button onclick="handleSearch()" class="absolute right-2 top-2 w-12 h-12 bg-blue-600 text-white rounded-2xl shadow-lg flex items-center justify-center">
+                    <i class="fa-solid fa-magic"></i>
+                </button>
             </div>
+            <div id="card-display">
+                <div class="text-center py-20">
+                    <img src="logo.png" class="w-24 h-24 mx-auto mb-4 opacity-20 grayscale">
+                    <p class="text-gray-300">融化冰块，探索语言的核心</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 笔记本视图 -->
+        <div id="tab-notebook" class="hidden">
+            <div class="flex justify-between items-center my-6">
+                <h2 class="text-xl font-bold">已存词卡</h2>
+                <div class="flex items-center gap-2 bg-white p-2 rounded-xl border">
+                    <i class="fa-solid fa-font text-xs text-gray-300"></i>
+                    <input type="range" min="14" max="26" value="16" oninput="adjustFont(this.value)" class="w-20">
+                </div>
+            </div>
+            <div id="notebook-list" class="space-y-4"></div>
+        </div>
+
+        <!-- 3. 闪卡复习视图 -->
+        <div id="tab-flashcards" class="hidden">
+            <div id="flash-info" class="mb-4 text-center text-xs font-bold text-gray-400 uppercase"></div>
+            <div id="flash-card-container"></div>
         </div>
     </main>
 
-    <!-- 导航 -->
-    <nav class="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-gray-100 p-6 flex justify-around items-center pb-10">
-        <button onclick="switchTab('search')" class="text-blue-600"><i class="fa-solid fa-search text-xl"></i></button>
-        <button onclick="switchTab('notebook')" class="text-gray-300"><i class="fa-solid fa-bookmark text-xl"></i></button>
-        <button onclick="switchTab('flashcards')" class="text-gray-300"><i class="fa-solid fa-bolt text-xl"></i></button>
+    <!-- 底部导航 -->
+    <nav class="fixed bottom-0 w-full bg-white/90 backdrop-blur-xl border-t border-gray-100 px-10 py-6 flex justify-between items-center safe-area">
+        <button onclick="switchTab('search')" id="nav-search" class="text-blue-600 transition-all"><i class="fa-solid fa-search text-xl"></i></button>
+        <button onclick="switchTab('notebook')" id="nav-notebook" class="text-gray-300 transition-all"><i class="fa-solid fa-bookmark text-xl"></i></button>
+        <button onclick="switchTab('flashcards')" id="nav-flashcards" class="text-gray-300 transition-all"><i class="fa-solid fa-bolt-lightning text-xl"></i></button>
     </nav>
 
     <script>
-        const LANGUAGES = [
-            {n:'English', c:'英语', v:'en-US'}, {n:'Japanese', c:'日语', v:'ja-JP'}, 
-            {n:'French', c:'法语', v:'fr-FR'}, {n:'Spanish', c:'西班牙语', v:'es-ES'},
-            {n:'German', c:'德语', v:'de-DE'}, {n:'Korean', c:'韩语', v:'ko-KR'}
-        ];
+        // 核心配置
+        const LANGUAGES = ['English', 'Chinese', 'Japanese', 'French', 'Spanish', 'German', 'Korean', 'Russian', 'Italian', 'Portuguese'];
+        let config = JSON.parse(localStorage.getItem('user_pref')) || { native: '', target: '' };
+        let notebook = JSON.parse(localStorage.getItem('my_notebook')) || [];
+        
+        // 注册 Service Worker
+        if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
 
-        let config = JSON.parse(localStorage.getItem('h_dict_v2')) || { targets: ['English'], apiKey: '' };
-        let notebook = JSON.parse(localStorage.getItem('h_dict_note')) || [];
-
+        // 初始化
         window.onload = () => {
-            renderSetup();
-            updateLangBar();
-            if(!localStorage.getItem('h_dict_v2')) showSettings();
+            const nSel = document.getElementById('native-lang');
+            const tSel = document.getElementById('target-lang');
+            LANGUAGES.forEach(l => {
+                nSel.add(new Option(l, l));
+                tSel.add(new Option(l, l));
+            });
+            if (!config.native) {
+                document.getElementById('setup-overlay').classList.remove('hidden');
+            } else {
+                updateUI();
+            }
         };
 
-        function renderSetup() {
-            const grid = document.getElementById('target-langs-grid');
-            grid.innerHTML = '';
-            LANGUAGES.forEach(l => {
-                const isAct = config.targets.includes(l.n);
-                const btn = document.createElement('div');
-                btn.className = `p-3 border rounded-2xl text-xs font-bold text-center cursor-pointer transition-all ${isAct ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-500'}`;
-                btn.innerText = l.c;
-                btn.onclick = () => {
-                    if(isAct) config.targets = config.targets.filter(t => t !== l.n);
-                    else config.targets.push(l.n);
-                    renderSetup();
-                };
-                grid.appendChild(btn);
-            });
-            document.getElementById('api-key').value = config.apiKey;
+        function saveConfig() {
+            config.native = document.getElementById('native-lang').value;
+            config.target = document.getElementById('target-lang').value;
+            localStorage.setItem('user_pref', JSON.stringify(config));
+            document.getElementById('setup-overlay').classList.add('hidden');
+            updateUI();
         }
 
-        function saveSettings() {
-            config.apiKey = document.getElementById('api-key').value;
-            localStorage.setItem('h_dict_v2', JSON.stringify(config));
-            document.getElementById('setup-overlay').classList.add('hidden');
-            updateLangBar();
+        function updateUI() {
+            document.getElementById('lang-indicator').innerText = `${config.target} 学习中`;
         }
 
         function showSettings() { document.getElementById('setup-overlay').classList.remove('hidden'); }
 
-        function updateLangBar() {
-            document.getElementById('active-langs-bar').innerHTML = config.targets.map(t => `<span class="text-[9px] px-2 py-0.5 bg-blue-50 text-blue-500 rounded-md font-bold uppercase">${t}</span>`).join('');
-        }
-
+        // 搜索与词卡生成
         async function handleSearch() {
             const word = document.getElementById('search-input').value.trim();
-            if(!word) return;
-            
-            const container = document.getElementById('result-container');
-            container.innerHTML = '<div class="w-full text-center py-20 text-blue-500 font-bold animate-pulse">正在跨语种深度解析...</div>';
-            
-            // 真实 AI 接入逻辑
-            if (config.apiKey) {
-                await fetchRealAIData(word, container);
-            } else {
-                // 智能模拟逻辑（修正了语种偏差）
-                setTimeout(() => {
-                    container.innerHTML = '';
-                    config.targets.forEach(lang => {
-                        const data = getSmartMockData(word, lang);
-                        renderCard(data, container);
-                    });
-                }, 800);
-            }
+            if (!word) return;
+
+            const display = document.getElementById('card-display');
+            display.innerHTML = '<div class="text-center py-20 animate-pulse text-blue-500 font-bold">AI 正在融化冰块中...</div>';
+
+            // 模拟 AI 解析过程
+            setTimeout(() => {
+                const aiResponse = {
+                    word: word,
+                    def: `在${config.target}中，这个词就像一个温暖的拥抱。它不仅仅表示“${word}”，更带有一种非常${word.length > 5 ? '正式' : '自然'}的社交质感。想象一下在咖啡馆里偶遇老朋友，你就会用到它。`,
+                    examples: [
+                        { t: `Wow, this ${word} is quite amazing!`, n: `哇，这个${word}真的太棒了！(日常)`, type: '对话' },
+                        { t: `The ${word} process has begun.`, n: `该${word}流程已经启动。(书面)`, type: '正式' },
+                        { t: `I can't believe how much ${word} changed things.`, n: `我不敢相信这个${word}改变了这么多。(对话)`, type: '感叹' }
+                    ],
+                    etymology: `[词源探秘] 源自古法语词根，原义是“连接”。它经过数百年的演变，从一个冰冷的法律术语变成了现在充满人性温暖的表达。`
+                };
+                renderCard(aiResponse);
+            }, 800);
         }
 
-        // --- 修正后的智能模拟引擎 ---
-        function getSmartMockData(word, target) {
-            const langMap = {
-                'English': { def: '英语中表示', tag: '🇬🇧 English', ety: '源自拉丁语根' },
-                'Japanese': { def: '日语中的意思为', tag: '🇯🇵 Japanese', ety: '具有汉字背景，强调语境' },
-                'French': { def: '法语中这个词代表', tag: '🇫🇷 French', ety: '带有浓厚的罗曼语系色彩' },
-                'German': { def: '德语中这个词是', tag: '🇩🇪 German', ety: '典型の日耳曼语族特征，构词严谨' },
-                'Spanish': { def: '西班牙语意思是', tag: '🇪🇸 Spanish', ety: '源自通俗拉丁语，发音明快' },
-                'Korean': { def: '韩语中它表达', tag: '🇰🇷 Korean', ety: '表音文字，带有独特的敬语体系' }
-            };
-
-            const info = langMap[target];
-            return {
-                word: word,
-                targetLang: info.tag,
-                definition: `[${target} 专解] 在${info.def}“${word}”。这在${target}语境下通常${word.length > 4 ? '比较正式' : '非常口语化'}。作为一个 ${target} 学习者，你需要注意它在不同场合的语气变化。`,
-                examples: [
-                    { t: `Sample sentence in ${target} for "${word}"...`, n: `这里是对应的母语翻译。`, type: 'chat' },
-                    { t: `Formal context usage of "${word}"...`, n: `正式场合的用法翻译。`, type: 'formal' }
-                ],
-                cultural: `[${target} 文化背景] ${info.ety}。在${target}国家，这个词不仅仅是一个符号，更代表了当地人对“核心连接”的理解。`
-            };
-        }
-
-        // --- 预留 AI 后端接口 (DeepSeek/OpenAI) ---
-        async function fetchRealAIData(word, container) {
-            // 这里你可以填入 DeepSeek 或 OpenAI 的标准 API 请求
-            // 如果你有 Key，可以解除这段注释并配置端点
-            container.innerHTML = '<div class="w-full text-center py-20">正在通过 API 获取真实释义...</div>';
-            /*
-            try {
-                const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.apiKey}` },
-                    body: JSON.stringify({
-                        model: "deepseek-chat",
-                        messages: [{role: "system", content: "你是一个多语种词典，请按JSON格式返回释义..."}, {role: "user", content: word}]
-                    })
-                });
-                // 解析返回并 renderCard...
-            } catch (e) { alert("API 请求失败，请检查 Key"); }
-            */
-        }
-
-        function renderCard(data, container) {
-            const card = document.createElement('div');
-            card.className = 'glass-card p-6 flex flex-col min-h-[500px] animate-card';
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <span class="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-1 rounded-lg uppercase tracking-widest">${data.targetLang}</span>
-                        <h2 class="text-3xl font-bold mt-2 text-gray-800">${data.word}</h2>
-                    </div>
-                    <button onclick="saveWord('${data.word}', '${data.targetLang}')" class="text-gray-100 hover:text-red-500"><i class="fa-solid fa-heart text-xl"></i></button>
-                </div>
-                <div class="mb-6"><p class="text-gray-700 leading-relaxed text-sm"><i class="fa-solid fa-quote-left text-blue-200 mr-2"></i>${data.definition}</p></div>
-                <div class="space-y-3 mb-6 flex-1">
-                    ${data.examples.map(ex => `
-                        <div class="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                            <div class="flex justify-between mb-1"><span class="text-[9px] font-bold text-blue-400 uppercase">${ex.type}</span></div>
-                            <p class="text-sm font-semibold text-gray-800">${ex.t}</p>
-                            <p class="text-xs text-gray-400 mt-1">${ex.n}</p>
+        function renderCard(data) {
+            const display = document.getElementById('card-display');
+            display.innerHTML = `
+                <div class="glass p-8 rounded-[40px] shadow-2xl bg-white animate-card">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h2 class="text-4xl font-black text-gray-800 mb-2">${data.word}</h2>
+                            <button onclick="speak('${data.word}')" class="text-blue-500 text-sm font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-circle-play text-xl"></i> 点击朗读
+                            </button>
                         </div>
-                    `).join('')}
-                </div>
-                <div class="bg-orange-50 p-4 rounded-2xl mt-4">
-                    <h4 class="text-orange-600 text-[9px] font-bold uppercase mb-1">Cultural Etymology</h4>
-                    <p class="text-[11px] text-orange-800/70 leading-relaxed">${data.cultural}</p>
+                        <button onclick="saveToNotebook(${JSON.stringify(data).replace(/"/g, '&quot;')})" id="save-btn" class="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-300">
+                            <i class="fa-solid fa-heart"></i>
+                        </button>
+                    </div>
+
+                    <p class="text-gray-600 leading-relaxed mb-8 italic">“${data.def}”</p>
+
+                    <div class="space-y-4 mb-8">
+                        ${data.examples.map(ex => `
+                            <div class="bg-blue-50/50 p-4 rounded-2xl border border-blue-50">
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-[10px] font-bold text-blue-400 uppercase tracking-widest">${ex.type}</span>
+                                    <button onclick="speak('${ex.t.replace(/'/g, "\\'")}')"><i class="fa-solid fa-volume-high text-blue-200 text-xs"></i></button>
+                                </div>
+                                <p class="text-sm font-bold text-gray-800">${ex.t}</p>
+                                <p class="text-xs text-gray-400 mt-1">${ex.n}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="bg-orange-50 p-5 rounded-[28px] border border-orange-100 mb-8">
+                        <h4 class="text-orange-600 text-xs font-bold uppercase mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-scroll"></i> Cultural Context
+                        </h4>
+                        <p class="text-xs text-orange-800/80 leading-relaxed">${data.etymology}</p>
+                    </div>
+
+                    <div class="relative">
+                        <input type="text" placeholder="继续追问这个词..." class="w-full p-4 pr-12 bg-gray-100 border-none rounded-2xl text-sm outline-none">
+                        <button class="absolute right-4 top-3.5 text-blue-400"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
                 </div>
             `;
-            container.appendChild(card);
         }
 
-        function saveWord(word, lang) {
-            notebook.push({word, lang, id: Date.now()});
-            localStorage.setItem('h_dict_note', JSON.stringify(notebook));
-            alert('已加入笔记');
+        // 笔记本功能
+        function saveToNotebook(data) {
+            if (notebook.some(n => n.word === data.word)) return alert('已经在笔记本中');
+            const newItem = {
+                ...data,
+                id: Date.now(),
+                status: '未学习', // 未学习, 学习中, 掌握
+                interval: 0,
+                nextReview: Date.now(),
+                fontSize: 16
+            };
+            notebook.push(newItem);
+            localStorage.setItem('my_notebook', JSON.stringify(notebook));
+            document.getElementById('save-btn').classList.replace('text-blue-300', 'text-red-500');
+            alert('已存入笔记本 💖');
         }
 
         function switchTab(tab) {
-            alert("切换到 " + tab + " 视图 (逻辑已连接)");
+            ['search', 'notebook', 'flashcards'].forEach(t => {
+                document.getElementById('tab-' + t).classList.add('hidden');
+                document.getElementById('nav-' + t).classList.replace('text-blue-600', 'text-gray-300');
+            });
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            document.getElementById('nav-' + tab).classList.replace('text-gray-300', 'text-blue-600');
+            document.getElementById('view-title').innerText = tab === 'search' ? '查单词' : (tab === 'notebook' ? '笔记本' : '复习中');
+            
+            if (tab === 'notebook') renderNotebook();
+            if (tab === 'flashcards') renderFlashcards();
+        }
+
+        function renderNotebook() {
+            const list = document.getElementById('notebook-list');
+            list.innerHTML = notebook.map(n => `
+                <div class="glass p-5 rounded-3xl mb-4 notebook-card" style="font-size: ${n.fontSize}px">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="font-bold text-xl">${n.word}</h3>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${getStatusColor(n.status)}">${n.status}</span>
+                        </div>
+                        <button onclick="speak('${n.word}')" class="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-blue-400 shadow-sm">
+                            <i class="fa-solid fa-volume-up"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function getStatusColor(s) {
+            if (s === '掌握') return 'bg-green-100 text-green-600';
+            if (s === '学习中') return 'bg-blue-100 text-blue-600';
+            return 'bg-gray-100 text-gray-400';
+        }
+
+        function adjustFont(v) {
+            document.querySelectorAll('.notebook-card').forEach(c => c.style.fontSize = v + 'px');
+            notebook.forEach(n => n.fontSize = v);
+            localStorage.setItem('my_notebook', JSON.stringify(notebook));
+        }
+
+        // 闪卡复习 (基于艾宾浩斯)
+        function renderFlashcards() {
+            const container = document.getElementById('flash-card-container');
+            const now = Date.now();
+            const due = notebook.filter(n => n.nextReview <= now && n.status !== '掌握');
+            
+            document.getElementById('flash-info').innerText = `今日待复习: ${due.length}`;
+            
+            if (due.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 text-gray-300">🎉 今日复习任务已全部完成！</div>`;
+                return;
+            }
+
+            const current = due[0];
+            container.innerHTML = `
+                <div class="flip-container" onclick="this.querySelector('.flipper').classList.toggle('flipped')">
+                    <div class="flipper">
+                        <div class="front">
+                            <h2 class="text-5xl font-black">${current.word}</h2>
+                            <p class="mt-8 text-blue-200 text-sm italic">点击翻面查看解析</p>
+                        </div>
+                        <div class="back text-left">
+                            <p class="text-gray-600 text-sm mb-4 leading-relaxed">${current.def}</p>
+                            <p class="text-xs font-bold text-blue-500">例句:</p>
+                            <p class="text-xs text-gray-400 italic">${current.examples[0].t}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-4 mt-8">
+                    <button onclick="updateSRS(${current.id}, 0)" class="flex-1 p-5 bg-red-100 text-red-600 rounded-3xl font-bold">忘记</button>
+                    <button onclick="updateSRS(${current.id}, 1)" class="flex-1 p-5 bg-orange-100 text-orange-600 rounded-3xl font-bold">模糊</button>
+                    <button onclick="updateSRS(${current.id}, 2)" class="flex-1 p-5 bg-green-100 text-green-600 rounded-3xl font-bold">认识</button>
+                </div>
+            `;
+        }
+
+        function updateSRS(id, level) {
+            const idx = notebook.findIndex(n => n.id === id);
+            const intervals = [0, 1, 3, 7, 15, 30]; // 天
+            
+            if (level === 2) { // 认识
+                notebook[idx].interval++;
+                if (notebook[idx].interval >= 5) notebook[idx].status = '掌握';
+                else notebook[idx].status = '学习中';
+            } else if (level === 1) { // 模糊
+                notebook[idx].interval = Math.max(0, notebook[idx].interval - 1);
+                notebook[idx].status = '学习中';
+            } else { // 忘记
+                notebook[idx].interval = 0;
+                notebook[idx].status = '未学习';
+            }
+
+            const nextDay = intervals[notebook[idx].interval] || 1;
+            notebook[idx].nextReview = Date.now() + (nextDay * 86400000);
+            
+            localStorage.setItem('my_notebook', JSON.stringify(notebook));
+            renderFlashcards();
+        }
+
+        // 语音朗读
+        function speak(text) {
+            const u = new SpeechSynthesisUtterance(text);
+            const voices = { 'English': 'en-US', 'Chinese': 'zh-CN', 'Japanese': 'ja-JP', 'French': 'fr-FR', 'Spanish': 'es-ES' };
+            u.lang = voices[config.target] || 'en-US';
+            u.rate = 0.9;
+            window.speechSynthesis.speak(u);
         }
     </script>
 </body>

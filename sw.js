@@ -1,15 +1,6 @@
-const CACHE_NAME = 'heart-dict-v1';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  './logo.png'
-];
-
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  e.waitUntil(caches.open('heart-v1').then(cache => cache.addAll(['./', './index.html', './logo.png'])));
 });
-
 self.addEventListener('fetch', (e) => {
   e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
 });
